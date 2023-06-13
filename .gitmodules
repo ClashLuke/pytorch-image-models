@@ -1,0 +1,3 @@
+[submodule "timm/optim/scram"]
+	path = timm/optim/scram
+	url = https://github.com/RossM/scram-pytorch/
