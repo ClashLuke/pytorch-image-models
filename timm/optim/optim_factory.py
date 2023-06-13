@@ -2,15 +2,13 @@
 Hacked together by / Copyright 2021 Ross Wightman
 """
 import logging
-from itertools import islice
-from typing import Optional, Callable, Tuple
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from itertools import islice
+from typing import Optional, Callable, Tuple
 
 from timm.models import group_parameters
-
 from .adabelief import AdaBelief
 from .adafactor import Adafactor
 from .adahessian import Adahessian
@@ -25,23 +23,16 @@ from .nadam import Nadam
 from .nvnovograd import NvNovoGrad
 from .radam import RAdam
 from .rmsprop_tf import RMSpropTF
+from .scram import EnsembleSGD, Scram, Simon
 from .sgdp import SGDP
-
 
 _logger = logging.getLogger(__name__)
 
-
 # optimizers to default to multi-tensor
-_DEFAULT_FOREACH = {
-    'lion',
-}
+_DEFAULT_FOREACH = {'lion', }
 
 
-def param_groups_weight_decay(
-        model: nn.Module,
-        weight_decay=1e-5,
-        no_weight_decay_list=()
-):
+def param_groups_weight_decay(model: nn.Module, weight_decay=1e-5, no_weight_decay_list=()):
     no_weight_decay_list = set(no_weight_decay_list)
     decay = []
     no_decay = []
@@ -54,9 +45,7 @@ def param_groups_weight_decay(
         else:
             decay.append(param)
 
-    return [
-        {'params': no_decay, 'weight_decay': 0.},
-        {'params': decay, 'weight_decay': weight_decay}]
+    return [{'params': no_decay, 'weight_decay': 0.}, {'params': decay, 'weight_decay': weight_decay}]
 
 
 def _group(it, size):
@@ -91,14 +80,9 @@ def _layer_map(model, layers_per_group=12, num_groups=None):
     return layer_map
 
 
-def param_groups_layer_decay(
-        model: nn.Module,
-        weight_decay: float = 0.05,
-        no_weight_decay_list: Tuple[str] = (),
-        layer_decay: float = .75,
-        end_layer_decay: Optional[float] = None,
-        verbose: bool = False,
-):
+def param_groups_layer_decay(model: nn.Module, weight_decay: float = 0.05, no_weight_decay_list: Tuple[str] = (),
+                             layer_decay: float = .75, end_layer_decay: Optional[float] = None,
+                             verbose: bool = False, ):
     """
     Parameter groups for layer-wise lr decay & weight decay
     Based on BEiT: https://github.com/microsoft/unilm/blob/master/beit/optim_factory.py#L58
@@ -134,16 +118,8 @@ def param_groups_layer_decay(
 
         if group_name not in param_groups:
             this_scale = layer_scales[layer_id]
-            param_group_names[group_name] = {
-                "lr_scale": this_scale,
-                "weight_decay": this_decay,
-                "param_names": [],
-            }
-            param_groups[group_name] = {
-                "lr_scale": this_scale,
-                "weight_decay": this_decay,
-                "params": [],
-            }
+            param_group_names[group_name] = {"lr_scale": this_scale, "weight_decay": this_decay, "param_names": [], }
+            param_groups[group_name] = {"lr_scale": this_scale, "weight_decay": this_decay, "params": [], }
 
         param_group_names[group_name]["param_names"].append(name)
         param_groups[group_name]["params"].append(param)
@@ -159,12 +135,7 @@ def optimizer_kwargs(cfg):
     """ cfg/argparse to kwargs helper
     Convert optimizer args in argparse args or cfg like object to keyword args for updated create fn.
     """
-    kwargs = dict(
-        opt=cfg.opt,
-        lr=cfg.lr,
-        weight_decay=cfg.weight_decay,
-        momentum=cfg.momentum,
-    )
+    kwargs = dict(opt=cfg.opt, lr=cfg.lr, weight_decay=cfg.weight_decay, momentum=cfg.momentum, )
     if getattr(cfg, 'opt_eps', None) is not None:
         kwargs['eps'] = cfg.opt_eps
     if getattr(cfg, 'opt_betas', None) is not None:
@@ -182,25 +153,12 @@ def create_optimizer(args, model, filter_bias_and_bn=True):
     """ Legacy optimizer factory for backwards compatibility.
     NOTE: Use create_optimizer_v2 for new code.
     """
-    return create_optimizer_v2(
-        model,
-        **optimizer_kwargs(cfg=args),
-        filter_bias_and_bn=filter_bias_and_bn,
-    )
+    return create_optimizer_v2(model, **optimizer_kwargs(cfg=args), filter_bias_and_bn=filter_bias_and_bn, )
 
 
-def create_optimizer_v2(
-        model_or_params,
-        opt: str = 'sgd',
-        lr: Optional[float] = None,
-        weight_decay: float = 0.,
-        momentum: float = 0.9,
-        foreach: Optional[bool] = None,
-        filter_bias_and_bn: bool = True,
-        layer_decay: Optional[float] = None,
-        param_group_fn: Optional[Callable] = None,
-        **kwargs,
-):
+def create_optimizer_v2(model_or_params, opt: str = 'sgd', lr: Optional[float] = None, weight_decay: float = 0.,
+                        momentum: float = 0.9, foreach: Optional[bool] = None, filter_bias_and_bn: bool = True,
+                        layer_decay: Optional[float] = None, param_group_fn: Optional[Callable] = None, **kwargs, ):
     """ Create an optimizer.
 
     TODO currently the model is passed in and all parameters are selected for optimization.
@@ -230,12 +188,8 @@ def create_optimizer_v2(
         if param_group_fn:
             parameters = param_group_fn(model_or_params)
         elif layer_decay is not None:
-            parameters = param_groups_layer_decay(
-                model_or_params,
-                weight_decay=weight_decay,
-                layer_decay=layer_decay,
-                no_weight_decay_list=no_weight_decay,
-            )
+            parameters = param_groups_layer_decay(model_or_params, weight_decay=weight_decay, layer_decay=layer_decay,
+                                                  no_weight_decay_list=no_weight_decay, )
             weight_decay = 0.
         elif weight_decay and filter_bias_and_bn:
             parameters = param_groups_weight_decay(model_or_params, weight_decay, no_weight_decay)
@@ -290,7 +244,7 @@ def create_optimizer_v2(
 
     # adaptive
     elif opt_lower == 'adam':
-        optimizer = optim.Adam(parameters, **opt_args) 
+        optimizer = optim.Adam(parameters, **opt_args)
     elif opt_lower == 'adamw':
         optimizer = optim.AdamW(parameters, **opt_args)
     elif opt_lower == 'adamp':
@@ -366,6 +320,28 @@ def create_optimizer_v2(
     elif opt_lower == 'fusednovograd':
         opt_args.setdefault('betas', (0.95, 0.98))
         optimizer = FusedNovoGrad(parameters, **opt_args)
+
+    # RossM's Scram group from https://github.com/RossM/scram-pytorch/ | clone with --recursive
+    elif opt_lower == "ensemblesgd":
+        optimizer = EnsembleSGD(parameters, **opt_args)
+    elif opt_lower == "scram":
+        optimizer = Scram(parameters, **opt_args)
+    elif opt_lower == "simon":
+        optimizer = Simon(parameters, **opt_args)
+    elif opt_lower == "simonr":
+        optimizer = Simon(parameters, rmsclip=True, **opt_args)
+    elif opt_lower == "simonl":
+        optimizer = Simon(parameters, layerwise=True, **opt_args)
+    elif opt_lower == "simonn":
+        optimizer = Simon(parameters, normalize=True, **opt_args)
+    elif opt_lower == "simonrl":
+        optimizer = Simon(parameters, rmsclip=True, layerwise=True, **opt_args)
+    elif opt_lower == "simonrn":
+        optimizer = Simon(parameters, rmsclip=True, normalize=True, **opt_args)
+    elif opt_lower == "simonln":
+        optimizer = Simon(parameters, layerwise=True, normalize=True, **opt_args)
+    elif opt_lower == "simonrln":
+        optimizer = Simon(parameters, rmsclip=True, layerwise=True, normalize=True, **opt_args)
 
     # bitsandbytes optimizers, require bitsandbytes to be installed
     elif opt_lower == 'bnbsgd':

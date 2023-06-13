@@ -1,3 +1,5 @@
-from timm.optim.scram.scram_pytorch import EnsembleSGD, Scram, Simon
+from .scram.scram_pytorch.esgd import EnsembleSGD
+from .scram.scram_pytorch.scram import Scram
+from .scram.scram_pytorch.simon import Simon
 
-__all__ = ["EnsembleSGD", "Scram", "Simon"]
+# __all__ = ["EnsembleSGD", "Scram", "Simon"]
